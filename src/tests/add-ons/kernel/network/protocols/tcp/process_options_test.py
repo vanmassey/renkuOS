@@ -118,6 +118,8 @@ main()
  assert(segment.max_segment_size == 0);
 
  // SACK must contain a two-byte header plus complete 8-byte blocks.
+ const uint8 emptySack[] = { TCP_OPTION_SACK, 2 };
+ run(emptySack, sizeof(emptySack), segment);
  const uint8 malformedSack[] = { TCP_OPTION_SACK, 3, 0x00 };
  run(malformedSack, sizeof(malformedSack), segment);
  assert((segment.options & TCP_HAS_SACK) == 0);
