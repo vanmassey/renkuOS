@@ -203,8 +203,14 @@ process_options(tcp_segment_header &segment, net_buffer *buffer, size_t size)
 	while (size > 0) {
 		int32 length = -1;
 
+		// Every option other than EOL and NOP has a length byte. Do not
+		// read it unless it is present in the remaining option data.
+		if (option->kind > TCP_OPTION_NOP && size < 2)
+			break;
+
 		switch (option->kind) {
 			case TCP_OPTION_END:
+				return;
 			case TCP_OPTION_NOP:
 				length = 1;
 				break;
@@ -231,7 +237,9 @@ process_options(tcp_segment_header &segment, net_buffer *buffer, size_t size)
 					segment.options |= TCP_SACK_PERMITTED;
 				break;
 			case TCP_OPTION_SACK:
-				if (size >= option->length) {
+				if (option->length >= 2
+					&& (option->length - 2) % sizeof(tcp_sack) == 0
+					&& size >= option->length) {
 					segment.options |= TCP_HAS_SACK;
 					segment.sackCount = min_c((option->length - 2)
 						/ sizeof(tcp_sack), MAX_SACK_BLKS);
@@ -247,7 +255,7 @@ process_options(tcp_segment_header &segment, net_buffer *buffer, size_t size)
 
 		if (length < 0) {
 			length = option->length;
-			if (length == 0 || length > (ssize_t)size)
+			if (length < 2 || length > (ssize_t)size)
 				break;
 		}
 
