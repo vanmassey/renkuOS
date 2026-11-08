@@ -1530,6 +1530,12 @@ ipv6_receive_data(net_buffer* buffer)
 
 	// get the transport protocol and transport header offset
 	uint16 transportHeaderOffset = header.GetHeaderOffset(buffer);
+	// A zero offset means the extension-header chain was malformed or
+	// truncated. Do not pass the packet on with an unset protocol or remove
+	// zero bytes from the buffer.
+	if (transportHeaderOffset == 0)
+		return B_BAD_DATA;
+
 	uint8 protocol = buffer->protocol;
 
 	// remove any trailing/padding data
