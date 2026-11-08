@@ -29,6 +29,7 @@ extern const char* __progname;
 const char* kProgramName = __progname;
 
 static int sResolveNames = 1;
+static bool sShowProgram = true;
 
 enum filter_flags {
 	FILTER_FAMILY_MASK		= 0x0000ff,
@@ -107,9 +108,10 @@ inet_print_address(sockaddr* address)
 void
 usage(int status)
 {
-	printf("Usage: %s [-nh]\n", kProgramName);
+	printf("Usage: %s [-nhP]\n", kProgramName);
 	printf("Options:\n");
 	printf("	-n	don't resolve names\n");
+	printf("	-P	don't show owning program\n");
 	printf("	-h	this help\n");
 	printf("Filter options:\n");
 	printf("	-4	IPv4\n");
@@ -136,6 +138,7 @@ main(int argc, char** argv)
 	const static struct option kLongOptions[] = {
 		{"help", no_argument, 0, 'h'},
 		{"numeric", no_argument, 0, 'n'},
+		{"no-program", no_argument, 0, 'P'},
 
 		{"inet", no_argument, 0, '4'},
 		{"inet6", no_argument, 0, '6'},
@@ -150,7 +153,7 @@ main(int argc, char** argv)
 	};
 
 	do {
-		opt = getopt_long(argc, argv, "hn46xtul", kLongOptions,
+		opt = getopt_long(argc, argv, "hnP46xtul", kLongOptions,
 			&optionIndex);
 		switch (opt) {
 			case -1:
@@ -159,6 +162,10 @@ main(int argc, char** argv)
 
 			case 'n':
 				sResolveNames = 0;
+				break;
+
+			case 'P':
+				sShowProgram = false;
 				break;
 
 			// Family filter
@@ -190,11 +197,14 @@ main(int argc, char** argv)
 		}
 	} while (opt != -1);
 
-	bool printProgram = true;
-		// TODO: add some more program options... :-)
-
-	printf("Proto  Recv-Q Send-Q Local Address         Foreign Address       "
-		"State        Program\n");
+	// Keep the default output compatible while allowing callers to skip
+	// process-name lookups when they only need socket information.
+	if (sShowProgram) {
+		printf("Proto  Recv-Q Send-Q Local Address         Foreign Address       "
+			"State        Program\n");
+	} else {
+		printf("Proto  Recv-Q Send-Q Local Address         Foreign Address\n");
+	}
 
 	uint32 cookie = 0;
 	int family = -1;
@@ -238,23 +248,28 @@ main(int argc, char** argv)
 		inet_print_address((sockaddr*)&stat.peer);
 		printf(" %-12s ", stat.state);
 
-		team_info info;
-		if (printProgram && get_team_info(stat.owner, &info) == B_OK) {
-			// remove arguments
-			char* name = strchr(info.args, ' ');
-			if (name != NULL)
-				name[0] = '\0';
+		if (sShowProgram) {
+			team_info info;
+			if (get_team_info(stat.owner, &info) == B_OK) {
+				// remove arguments
+				char* name = strchr(info.args, ' ');
+				if (name != NULL)
+					name[0] = '\0';
 
-			// remove path name
-			name = strrchr(info.args, '/');
-			if (name != NULL)
-				name++;
-			else
-				name = info.args;
+				// remove path name
+				name = strrchr(info.args, '/');
+				if (name != NULL)
+					name++;
+				else
+					name = info.args;
 
-			printf("%" B_PRId32 "/%s\n", stat.owner, name);
-		} else
-			printf("%" B_PRId32 "\n", stat.owner);
+				printf("%" B_PRId32 "/%s\n", stat.owner, name);
+			} else {
+				printf("%" B_PRId32 "\n", stat.owner);
+			}
+		} else {
+			putchar('\n');
+		}
 	}
 
 	return 0;
