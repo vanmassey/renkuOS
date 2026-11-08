@@ -235,40 +235,61 @@ static mutex sReceivingProtocolLock;
 uint16
 IPv6Header::GetHeaderOffset(net_buffer* buffer, uint32 headerCode) const
 {
-	uint16 offset = sizeof(struct ip6_hdr);
+	uint32 offset = sizeof(struct ip6_hdr);
 	uint8 next = header.ip6_nxt;
 
-	// these are the extension headers that might be supported one day
+	// Walk extension headers until we find the requested header or reach
+	// the transport protocol. ESP is deliberately not walked: its contents
+	// are encrypted and its header does not use the generic ip6_ext layout.
 	while (next != headerCode
 		&& (next == IPPROTO_HOPOPTS
 			|| next == IPPROTO_ROUTING
 			|| next == IPPROTO_FRAGMENT
-			|| next == IPPROTO_ESP
 			|| next == IPPROTO_AH
 			|| next == IPPROTO_DSTOPTS)) {
 		struct ip6_ext extensionHeader;
 		status_t status = gBufferModule->read(buffer, offset,
-			&extensionHeader, sizeof(ip6_ext));
+			&extensionHeader, sizeof(extensionHeader));
 		if (status != B_OK)
-			break;
+			return 0;
+
+		uint32 extensionLength;
+		if (next == IPPROTO_FRAGMENT) {
+			extensionLength = sizeof(struct ip6_frag);
+		} else if (next == IPPROTO_AH) {
+			// AH length is expressed in 32-bit words, including two
+			// fixed words, unlike the other extension headers here.
+			extensionLength = (extensionHeader.ip6e_len + 2) * 4;
+		} else {
+			// Hop-by-Hop, Routing and Destination Options lengths are
+			// expressed in 8-byte units, excluding the first unit.
+			extensionLength = (extensionHeader.ip6e_len + 1) * 8;
+		}
+
+		if (extensionLength < sizeof(extensionHeader)
+			|| offset > buffer->size
+			|| extensionLength > buffer->size - offset
+			|| offset + extensionLength > 0xffff) {
+			return 0;
+		}
 
 		next = extensionHeader.ip6e_nxt;
-		offset += extensionHeader.ip6e_len;
+		offset += extensionLength;
 	}
 
-	// were we looking for a specific header?
+	// Were we looking for a specific header?
 	if (headerCode != ~0u) {
 		if (next == headerCode) {
-			// found the specific header
-			return offset;
+			// Found the specific header.
+			return (uint16)offset;
 		}
-		// return 0 if fragement header is not present
+		// Return 0 if the requested extension header is not present.
 		return 0;
 	}
 
-	// the general transport layer header case
+	// The general transport layer header case.
 	buffer->protocol = next;
-	return offset;
+	return (uint16)offset;
 }
 
 
