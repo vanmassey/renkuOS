@@ -266,7 +266,9 @@ IPv6Header::GetHeaderOffset(net_buffer* buffer, uint32 headerCode) const
 			extensionLength = (extensionHeader.ip6e_len + 1) * 8;
 		}
 
-		if (extensionLength < sizeof(extensionHeader)
+		uint32 minimumLength = next == IPPROTO_AH ? 12
+			: sizeof(extensionHeader);
+		if (extensionLength < minimumLength
 			|| offset > buffer->size
 			|| extensionLength > buffer->size - offset
 			|| offset + extensionLength > 0xffff) {
