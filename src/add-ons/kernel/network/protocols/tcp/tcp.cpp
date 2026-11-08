@@ -237,7 +237,7 @@ process_options(tcp_segment_header &segment, net_buffer *buffer, size_t size)
 					segment.options |= TCP_SACK_PERMITTED;
 				break;
 			case TCP_OPTION_SACK:
-				if (option->length >= 2
+				if (option->length >= 2 + sizeof(tcp_sack)
 					&& (option->length - 2) % sizeof(tcp_sack) == 0
 					&& size >= option->length) {
 					segment.options |= TCP_HAS_SACK;
