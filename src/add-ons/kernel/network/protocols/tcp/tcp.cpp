@@ -196,7 +196,10 @@ process_options(tcp_segment_header &segment, net_buffer *buffer, size_t size)
 			return;
 		}
 
-		gBufferModule->read(buffer, sizeof(tcp_header), optionsBuffer, size);
+		if (gBufferModule->read(buffer, sizeof(tcp_header), optionsBuffer,
+				size) != B_OK)
+			return;
+
 		option = (tcp_option *)optionsBuffer;
 	}
 
