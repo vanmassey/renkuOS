@@ -75,9 +75,12 @@ struct tcp_segment_header {
 
 struct net_buffer { uint8 bytes[64]; };
 struct net_buffer_module_info {
+ bool failRead = false;
  status_t direct_access(net_buffer*, size_t, size_t, void**) { return B_ERROR; }
  status_t read(net_buffer* buffer, size_t offset, void* out, size_t size)
  {
+  if (failRead)
+   return B_ERROR;
   memcpy(out, buffer->bytes + offset, size);
   return B_OK;
  }
@@ -99,6 +102,15 @@ int
 main()
 {
  tcp_segment_header segment;
+
+ // A failed fallback read must not leave uninitialised option bytes to parse.
+ const uint8 validMssForReadFailure[] = {
+  TCP_OPTION_MAX_SEGMENT_SIZE, 4, 0x05, 0xb4
+ };
+ bufferModule.failRead = true;
+ run(validMssForReadFailure, sizeof(validMssForReadFailure), segment);
+ assert(segment.max_segment_size == 0);
+ bufferModule.failRead = false;
 
  // A non-EOL option with only its kind byte must be ignored safely.
  const uint8 truncatedHeader[] = { TCP_OPTION_MAX_SEGMENT_SIZE };
