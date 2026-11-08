@@ -222,7 +222,8 @@ process_options(tcp_segment_header &segment, net_buffer *buffer, size_t size)
 					segment.max_segment_size = ntohs(option->max_segment_size);
 				break;
 			case TCP_OPTION_WINDOW_SHIFT:
-				if (option->length == 3 && size >= 3) {
+				if (option->length == 3 && size >= 3
+					&& option->window_shift <= TCP_MAX_WINDOW_SHIFT) {
 					segment.options |= TCP_HAS_WINDOW_SCALE;
 					segment.window_shift = option->window_shift;
 				}
