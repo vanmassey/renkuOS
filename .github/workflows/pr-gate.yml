@@ -17,6 +17,7 @@ on:
 # none: it reads public code and pulls a public container.
 permissions:
   contents: read
+  packages: read
 
 concurrency:
   group: pr-gate-${{ github.event.pull_request.number }}
@@ -80,6 +81,17 @@ jobs:
           OWNER="$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
           echo "image=ghcr.io/${OWNER}/cross-compiler:${{ matrix.arch }}-${REV}" >> "$GITHUB_OUTPUT"
 
+
+      # The toolchain publisher pushes to GHCR with GITHUB_TOKEN. Pull it
+      # with the same repository-scoped token rather than assuming the package
+      # is anonymous-public. Fork PRs receive a read-only token, which is all
+      # this step needs.
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Pull toolchain
         run: docker pull --quiet "${{ steps.img.outputs.image }}"
