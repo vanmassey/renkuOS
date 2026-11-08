@@ -34,6 +34,7 @@ typedef int status_t;
 #define B_BAD_DATA -2
 #define kMaxOptionSize 40
 #define MAX_SACK_BLKS 4
+#define TCP_MAX_WINDOW_SHIFT 14
 #define min_c(a, b) ((a) < (b) ? (a) : (b))
 #define dprintf(...) ((void)0)
 
@@ -135,6 +136,15 @@ main()
  const uint8 malformedSack[] = { TCP_OPTION_SACK, 3, 0x00 };
  run(malformedSack, sizeof(malformedSack), segment);
  assert((segment.options & TCP_HAS_SACK) == 0);
+
+ // Window scale values above the RFC 7323 limit are ignored.
+ const uint8 invalidWindowShift[] = { TCP_OPTION_WINDOW_SHIFT, 3, 15 };
+ run(invalidWindowShift, sizeof(invalidWindowShift), segment);
+ assert((segment.options & TCP_HAS_WINDOW_SCALE) == 0);
+ const uint8 validWindowShift[] = { TCP_OPTION_WINDOW_SHIFT, 3, 14 };
+ run(validWindowShift, sizeof(validWindowShift), segment);
+ assert((segment.options & TCP_HAS_WINDOW_SCALE) != 0);
+ assert(segment.window_shift == 14);
 
  // A valid MSS option is decoded in network byte order.
  const uint8 validMss[] = { TCP_OPTION_MAX_SEGMENT_SIZE, 4, 0x05, 0xb4 };
