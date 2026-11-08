@@ -69,6 +69,12 @@ struct udp_header {
 	uint16 udp_checksum;
 } _PACKED;
 
+static inline bool
+udp_length_is_valid(uint16 udpLength, size_t packetSize)
+{
+	return udpLength >= sizeof(udp_header) && udpLength <= packetSize;
+}
+
 
 typedef NetBufferField<uint16, offsetof(udp_header, udp_checksum)>
 	UDPChecksumField;
@@ -836,9 +842,9 @@ UdpEndpointManager::Deframe(net_buffer* buffer)
 		destination.AsString(true).Data());
 
 	uint16 udpLength = ntohs(header.udp_length);
-	if (udpLength > buffer->size) {
-		TRACE_EPM("  Deframe(): buffer is too short, expected %hu.",
-			udpLength);
+	if (!udp_length_is_valid(udpLength, buffer->size)) {
+		TRACE_EPM("  Deframe(): invalid UDP length %hu for packet size %"
+			B_PRIu32 ".", udpLength, buffer->size);
 		return B_MISMATCHED_VALUES;
 	}
 
