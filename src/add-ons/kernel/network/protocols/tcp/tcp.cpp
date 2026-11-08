@@ -203,6 +203,15 @@ process_options(tcp_segment_header &segment, net_buffer *buffer, size_t size)
 	while (size > 0) {
 		int32 length = -1;
 
+		// TCP options other than EOL and NOP carry a length byte. Validate
+		// that byte before reading it or any option-specific fields.
+		if (option->kind != TCP_OPTION_END && option->kind != TCP_OPTION_NOP) {
+			if (size < 2 || option->length < 2
+				|| option->length > (ssize_t)size) {
+				break;
+			}
+		}
+
 		switch (option->kind) {
 			case TCP_OPTION_END:
 			case TCP_OPTION_NOP:
