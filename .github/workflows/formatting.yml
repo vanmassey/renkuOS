@@ -1,0 +1,106 @@
+name: formatting
+
+on:
+  # Validate pull requests whose target is main.
+  pull_request:
+    branches:
+      - main
+
+  # Validate direct updates to main as well.
+  push:
+    branches:
+      - main
+
+# Formatting checks need repository contents only.
+permissions:
+  contents: read
+
+# Cancel stale runs when newer commits arrive for the same ref or PR.
+concurrency:
+  group: formatting-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  formatting:
+    name: C/C++ and Markdown formatting
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # Fetch full history so the merge base can be calculated reliably.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Compare a PR with its target branch, or a push with its previous commit.
+      - name: Resolve comparison base
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            git fetch --no-tags origin \
+              "+refs/heads/${GITHUB_BASE_REF}:refs/remotes/origin/${GITHUB_BASE_REF}"
+            BASE="$(git merge-base "origin/${GITHUB_BASE_REF}" HEAD)"
+          else
+            BASE="${{ github.event.before }}"
+            if [[ "$BASE" =~ ^0+$ ]]; then
+              BASE="$(git rev-parse HEAD^)"
+            fi
+          fi
+
+          echo "BASE=$BASE" >> "$GITHUB_ENV"
+          echo "Comparing changes from $BASE"
+
+      # Match RenkuOS policy: format only changed C/C++ lines and never
+      # impose a new style on inherited Haiku code.
+      - name: Check C/C++ formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ ! -f .clang-format ]]; then
+            echo "::notice::No root .clang-format exists; skipping this check as required by current project policy."
+            exit 0
+          fi
+
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq clang-format
+
+          if ! FORMAT_DIFF="$(git clang-format --diff \
+              --extensions c,cc,cpp,cxx,h,hh,hpp,hxx "$BASE")"; then
+            echo "::error::git clang-format could not complete."
+            exit 1
+          fi
+
+          if [[ -n "$FORMAT_DIFF" ]] &&
+             [[ "$FORMAT_DIFF" != *"no modified files"* ]] &&
+             [[ "$FORMAT_DIFF" != *"did not modify"* ]]; then
+            printf '%s\n' "$FORMAT_DIFF"
+            echo "::error::C/C++ formatting violations detected. Run git clang-format $BASE."
+            exit 1
+          fi
+
+          echo "C/C++ formatting passed."
+
+      # Lint only changed Markdown files to keep feedback focused.
+      - name: Check Markdown formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mapfile -d '' MARKDOWN_FILES < <(
+            git diff --name-only -z --diff-filter=ACMR "$BASE" HEAD -- \
+              '*.md' '*.markdown'
+          )
+
+          if [[ ${#MARKDOWN_FILES[@]} -eq 0 ]]; then
+            echo "No changed Markdown files; nothing to lint."
+            exit 0
+          fi
+
+          # Pin the linter version for reproducible CI results.
+          npx --yes markdownlint-cli2@0.18.1 "${MARKDOWN_FILES[@]}"
+
+          echo "Markdown lint passed."
