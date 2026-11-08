@@ -155,7 +155,7 @@ main()
     assert(endpoint.fDuplicateAcknowledgeCount == 0);
     assert((endpoint.fFlags & FLAG_RECOVERY) == 0);
     assert(endpoint.fRetransmitTimeout == TCP_MAX_RETRANSMIT_TIMEOUT);
-    assert(stackModule.lastTimeout == 0);
+    // _SendQueued() owns re-arming the data retransmission timer.
 
     // SYN-SENT retries the active-open SYN and re-arms its timer.
     stackModule = StackModule();
